@@ -1,0 +1,53 @@
+version: 0.2
+env:
+  shell: bash
+phases:
+  install:
+    runtime-versions:
+      nodejs: 16
+    commands:
+      - echo Install started on `date`
+      - cd app
+      - yarn install
+    finally:
+      - echo Install finished on `date`
+      - |
+        echo "\n*************** OS Environment ***************"
+        echo " NodeJS Version: $(node --version)"
+        echo " Yarn Version: $(yarn --version)"
+      - |
+        echo "\n*************** Environment Variables ***************"
+        echo " [APPLICATION_NAME] ${APPLICATION_NAME}"
+        echo " [SERVICE_NAME] ${SERVICE_NAME}"
+        echo " [ENVIRONMENT] ${ENVIRONMENT}"
+  pre_build:
+    commands:
+      - echo Pre Build started on `date`
+      - export TZ="Asia/Tokyo"
+    finally:
+      - echo Pre Build finished on `date`
+  build:
+    commands:
+      - echo Build started on `date`
+      - yarn build
+    finally:
+      - echo Build finished on `date`
+  post_build:
+    commands:
+      - echo Post Build started on `date`
+    finally:
+      - echo Post Build finished on `date`
+artifacts:
+  files:
+    - "**/*"
+  secondary-artifacts:
+    Application:
+      files:
+        - "pipeline/buildspecs/**/*"
+        - "app/*"
+        - "app/dist/**/*"
+        - "app/src/**/*"
+        - "app/public/*"
+    AWSResources:
+      files:
+        - "resources/aws/**/*"

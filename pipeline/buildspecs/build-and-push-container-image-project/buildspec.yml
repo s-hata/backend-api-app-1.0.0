@@ -1,0 +1,56 @@
+version: 0.2
+env:
+  shell: bash
+phases:
+  install:
+    runtime-versions:
+      nodejs: 16
+    commands:
+      - echo Install started on `date`
+      - cd app
+      - yarn install
+    finally:
+      - echo Install finished on `date`
+      - |
+        echo "\n*************** OS Environment ***************"
+        echo " NodeJS Version: $(node --version)"
+        echo " Yarn Version: $(yarn --version)"
+      - |
+        echo "\n*************** Environment Variables ***************"
+        echo " [APPLICATION_NAME] ${APPLICATION_NAME}"
+        echo " [SERVICE_NAME] ${SERVICE_NAME}"
+        echo " [ENVIRONMENT] ${ENVIRONMENT}"
+        echo " [REPOSITORY_URI] ${REPOSITORY_URI}"
+        echo " [REPOSITORY_NAME] ${REPOSITORY_NAME}"
+  pre_build:
+    commands:
+      - echo Pre Build started on `date`
+      - export TZ="Asia/Tokyo"
+      - echo Logging in to Amazon ECR...
+      - $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+      - echo $CODEBUILD_SOURCE_VERSION
+      - IMAGE_TAG=$(echo $CODEBUILD_SOURCE_VERSION | cut -d / -f 4)
+      - echo $IMAGE_TAG
+    finally:
+      - echo Pre Build finished on `date`
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - docker build -t ${APPLICATION_NAME}-${SERVICE_NAME}-${ENVIRONMENT}-backend-api-app:${IMAGE_TAG} .
+      - docker tag ${APPLICATION_NAME}-${SERVICE_NAME}-${ENVIRONMENT}-backend-api-app:${IMAGE_TAG} $REPOSITORY_URI:latest
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+      - docker image list
+    finally:
+      - echo Build finished on `date`
+  post_build:
+    commands:
+      - echo Post Build started on `date`
+      - echo Pushing the Docker images...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+    finally:
+      - echo Post Build finished on `date`
+artifacts:
+  files:
+    - "**/*"

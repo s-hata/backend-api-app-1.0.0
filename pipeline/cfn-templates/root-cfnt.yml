@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: The CI/CD pipeline resources for Frontend App
+
+Parameters:
+  ApplicationName:
+    Type: String
+  ServiceName:
+    Type: String
+  Environment:
+    Type: String
+    Default: dev
+  ArtifactRepositoryTmplPath:
+    Type: String
+  BuildAndUnitTestProjectTmplPath:
+    Type: String
+  BuildAndPushContainerImageProjectStackTmplPath:
+    Type: String
+  PipelineTmplPath:
+    Type: String
+  ContainerImageRepositoryTmplPath:
+    Type: String
+  RepositoryName: 
+    Type: String
+  BranchName:
+    Type: String
+
+Resources:
+  ArtifactRepositoryStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref ArtifactRepositoryTmplPath
+      TimeoutInMinutes: 5
+      Parameters:
+        ParentStackName: !Ref AWS::StackName
+        ApplicationName: !Ref ApplicationName
+        ServiceName: !Ref ServiceName
+        Environment: !Ref Environment
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+  BuildAndUnitTestProjectStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref BuildAndUnitTestProjectTmplPath
+      TimeoutInMinutes: 5
+      Parameters:
+        ParentStackName: !Ref AWS::StackName
+        ApplicationName: !Ref ApplicationName
+        ServiceName: !Ref ServiceName
+        ArtifactEncryptionKeyArn: !GetAtt ArtifactRepositoryStack.Outputs.EncryptionKeyArn
+        Environment: !Ref Environment
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+  BuildAndPushContainerImageProjectStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref BuildAndPushContainerImageProjectStackTmplPath
+      TimeoutInMinutes: 5
+      Parameters:
+        ParentStackName: !Ref AWS::StackName
+        ApplicationName: !Ref ApplicationName
+        ServiceName: !Ref ServiceName
+        Environment: !Ref Environment
+        ArtifactEncryptionKeyArn: !GetAtt ArtifactRepositoryStack.Outputs.EncryptionKeyArn
+        ContainerImageRepositoryName: !GetAtt ContainerImageRepositoryStack.Outputs.Name
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+  PipelineStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref PipelineTmplPath
+      TimeoutInMinutes: 5
+      Parameters:
+        ParentStackName: !Ref AWS::StackName
+        ApplicationName: !Ref ApplicationName
+        ServiceName: !Ref ServiceName
+        Environment: !Ref Environment
+        BuildAndUnitTestProjectName: !GetAtt BuildAndUnitTestProjectStack.Outputs.ProjectName
+        BuildAndPushContainerImageProjectName: !GetAtt BuildAndPushContainerImageProjectStack.Outputs.ProjectName
+        ArtifactRepositoryName: !GetAtt ArtifactRepositoryStack.Outputs.Name
+        ArtifactEncryptionKeyArn: !GetAtt ArtifactRepositoryStack.Outputs.EncryptionKeyArn
+        RepositoryName: !Ref RepositoryName
+        BranchName: !Ref BranchName
+        ContainerImageRepositoryName: !GetAtt ContainerImageRepositoryStack.Outputs.Name
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ContainerImageRepositoryStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref ContainerImageRepositoryTmplPath
+      TimeoutInMinutes: 5
+      Parameters:
+        ParentStackName: !Ref AWS::StackName
+        ApplicationName: !Ref ApplicationName
+        ServiceName: !Ref ServiceName
+        Environment: !Ref Environment
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment

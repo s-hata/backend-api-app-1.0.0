@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Resources of the artifact repository
+
+Parameters:
+  ParentStackName:
+    Type: String
+  ApplicationName:
+    Type: String
+  ServiceName:
+    Type: String
+  Environment:
+    Type: String
+
+Resources:
+  ArtifactRepository:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Tags:
+        - Key: "StackName"
+          Value: !Ref ParentStackName
+        - Key: "ApplicationName"
+          Value: !Ref ApplicationName
+        - Key: "ServiceName"
+          Value: !Ref ServiceName
+        - Key: "Environment"
+          Value: !Ref Environment
+
+  ArtifactEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: !Ref AWS::StackName
+        Statement:
+          - Sid: Allows admin of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+            Resource: "*"
+      Tags:
+        - Key: StackName
+          Value: !Ref ParentStackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ArtifactEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${ApplicationName}-${ServiceName}-${Environment}-Artifact-EncryptionKey
+      TargetKeyId: !Ref ArtifactEncryptionKey
+
+Outputs:
+  Arn:
+    Value: !GetAtt ArtifactRepository.Arn
+  Name:
+    Value: !Ref ArtifactRepository
+  EncryptionKeyArn:
+    Value: !GetAtt ArtifactEncryptionKey.Arn
+  EncryptionKeyID:
+    Value: !Ref ArtifactEncryptionKey
+  EncryptionKeyAliasName:
+    Value: !Ref ArtifactEncryptionKeyAlias

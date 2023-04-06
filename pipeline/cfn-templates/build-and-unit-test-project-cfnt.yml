@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Resources of the CodeBuild project for Build and Unit Test
+
+Parameters:
+  ParentStackName:
+    Type: String
+  ApplicationName:
+    Type: String
+  ServiceName:
+    Type: String
+  Environment:
+    Type: String
+  ArtifactEncryptionKeyArn:
+    Type: String
+
+Mappings:
+  Constraints:
+    BuildResources:
+      CodeBuildImage: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+      ComputeType: BUILD_GENERAL1_SMALL
+      BuildSpec: pipeline/buildspecs/build-and-unit-test-project/buildspec.yml
+
+Resources:
+
+  BuildAndUnitTestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      ServiceRole: !Ref BuildAndUnitTestProjectRole
+      EncryptionKey: !Ref ArtifactEncryptionKeyArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: !FindInMap [ Constraints, BuildResources, ComputeType ]
+        Image: !FindInMap [ Constraints, BuildResources, CodeBuildImage ]
+        PrivilegedMode: True
+        EnvironmentVariables:
+          - Name: APPLICATION_NAME
+            Value: !Ref ApplicationName
+          - Name: SERVICE_NAME
+            Value: !Ref ServiceName
+          - Name: ENVIRONMENT
+            Value: !Ref Environment
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !FindInMap [ Constraints, BuildResources, BuildSpec ]
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref BuildAndUnitTestProjectLogsGroup
+      Cache:
+        Type: LOCAL
+        Modes:
+          - LOCAL_DOCKER_LAYER_CACHE
+          - LOCAL_SOURCE_CACHE
+      Tags:
+        - Key: StackName
+          Value: !Ref ParentStackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+      TimeoutInMinutes: 10
+
+  BuildAndUnitTestProjectPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Path: "/"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - "logs:*"
+              - "cloudformation:CancelUpdateStack"
+              - "cloudformation:ContinueUpdateRollback"
+              - "cloudformation:CreateChangeSet"
+              - "cloudformation:CreateStack"
+              - "cloudformation:CreateUploadBucket"
+              - "cloudformation:DeleteStack"
+              - "cloudformation:DescribeChangeSet"
+              - "cloudformation:ExecuteChangeSet"
+              - "cloudformation:DescribeStackEvents"
+              - "cloudformation:DescribeStackResource"
+              - "cloudformation:DescribeStackResources"
+              - "cloudformation:DescribeStacks"
+              - "cloudformation:GetStackPolicy"
+              - "cloudformation:GetTemplate"
+              - "cloudformation:GetTemplateSummary"
+              - "cloudformation:ListStackResources"
+              - "cloudformation:ListStacks"
+              - "cloudformation:SetStackPolicy"
+              - "cloudformation:UpdateStack"
+              - "cloudformation:UpdateTerminationProtection"
+              - "cloudformation:ValidateTemplate"
+              - "codebuild:StopBuild"
+              - "codebuild:CreateReportGroup"
+              - "codebuild:CreateReport"
+              - "codebuild:BatchPutTestCases"
+              - "codebuild:UpdateReport"
+              - "codebuild:BatchPutCodeCoverages"
+              - "dynamodb:CreateTable"
+              - "dynamodb:DeleteTable"
+              - "dynamodb:DescribeContinuousBackups"
+              - "dynamodb:DescribeTable"
+              - "dynamodb:ListTables"
+              - "dynamodb:TagResource"
+              - "dynamodb:ListTagsOfResource"
+              - "dynamodb:UpdateContinuousBackups"
+              - "dynamodb:UpdateTable"
+              - "dynamodb:UntagResource"
+              - "ec2:DescribeNetworkInterfaces"
+              - "iam:AttachRolePolicy"
+              - "iam:CreateRole"
+              - "iam:CreateRolePolicy"
+              - "iam:DeleteRole"
+              - "iam:DeleteRolePolicy"
+              - "iam:DetachRolePolicy"
+              - "iam:GetRole"
+              - "iam:GetRolePolicy"
+              - "iam:ListPolicies"
+              - "iam:PassRole"
+              - "iam:PutRolePolicy"
+              - "iam:UpdateRole"
+              - "iam:UpdateRolePolicy"
+              - "lambda:AddPermission"
+              - "lambda:CreateAlias"
+              - "lambda:CreateFunction"
+              - "lambda:CreatePermission"
+              - "lambda:DeleteAlias"
+              - "lambda:DeleteFunction"
+              - "lambda:GetFunction"
+              - "lambda:GetFunctionConfiguration"
+              - "lambda:ListTags"
+              - "lambda:RemovePermission"
+              - "lambda:TagResource"
+              - "lambda:UntagResource"
+              - "lambda:UpdateAlias"
+              - "lambda:UpdateFunction"
+              - "lambda:UpdateFunctionCode"
+              - "lambda:UpdateFunctionConfiguration"
+              - "lambda:UpdatePermission"
+              - "route53:ChangeResourceRecordSets"
+              - "route53:ChangeTagsForResource"
+              - "route53:CreateHealthCheck"
+              - "route53:DeleteHealthCheck"
+              - "route53:GetChange"
+              - "route53:ListHostedZones"
+              - "route53:ListResourceRecordSets"
+              - "s3:Delete*"
+              - "s3:GetObject"
+              - "s3:ListAllMyBuckets"
+              - "s3:ListBucket"
+              - "s3:ListBuckets"
+              - "s3:ListObjects"
+              - "s3:Put*"
+              - "sns:CreateTopic"
+              - "sns:DeleteTopic"
+              - "sns:GetTopicAttributes"
+              - "sns:ListSubscriptionsByTopic"
+              - "sns:ListTopics"
+              - "sns:SetTopicAttributes"
+              - "sns:Subscribe"
+              - "sns:Unsubscribe"
+              - "ssm:AddTagsToResource"
+              - "ssm:GetParameter"
+              - "ssm:GetParameters"
+              - "ssm:PutParameter"
+              - "kms:*"
+              - "secretsmanager:GetSecretValue"
+            Effect: Allow
+            Resource: "*"
+
+  BuildAndUnitTestProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref BuildAndUnitTestProjectPolicy
+      Tags:
+        - Key: StackName
+          Value: !Ref ParentStackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+  BuildAndUnitTestProjectLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+      Tags:
+        - Key: StackName
+          Value: !Ref ParentStackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  ProjectArn:
+    Value: !GetAtt BuildAndUnitTestProject.Arn
+  ProjectName:
+    Value: !Ref BuildAndUnitTestProject
+  RoleName:
+    Value: !Ref BuildAndUnitTestProjectRole
+  RoleArn:
+    Value: !GetAtt BuildAndUnitTestProjectRole.Arn
+  RoleId:
+    Value: !GetAtt BuildAndUnitTestProjectRole.RoleId
+  PolicyName:
+    Value: !Ref BuildAndUnitTestProjectPolicy

@@ -1,0 +1,413 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Resources of the backend api app
+
+Parameters:
+  ApplicationName:
+    Type: String
+  ServiceName:
+    Type: String
+  Environment:
+    Type: String
+  VpcCidrBlock:
+    Description: (Should be defined) Cidr Block of VPC
+    Type: String
+  PublicSubnetACidrBlock:
+    Description: (Should be defined) Cidr Block of Public Subnet A
+    Type: String
+  PublicSubnetBCidrBlock:
+    Description: (Should be defined) Cidr Block of Public Subnet B
+    Type: String
+  PrivateAPSubnetACidrBlock:
+    Description: (Should be defined) Cidr Block of Private AP Subnet A
+    Type: String
+  PrivateAPSubnetBCidrBlock:
+    Description: (Should be defined) Cidr Block of Private AP Subnet B
+    Type: String
+  ContainerImage:
+    Description: Container image stored in ECR
+    Type: String
+
+Mappings:
+  Constraints:
+    Container:
+      DesiredCount: 2
+    LB:
+      Port: 80
+    AP:
+      Port: 8080
+      LogRetentionPeriod: 7
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetACidrBlock
+      AvailabilityZone: !Select [ "0", !GetAZs { "Ref": "AWS::Region" } ]
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetBCidrBlock
+      AvailabilityZone: !Select [ "1", !GetAZs { "Ref": "AWS::Region" } ]
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+  PrivateAPSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateAPSubnetACidrBlock
+      AvailabilityZone: !Select [ "0", !GetAZs { "Ref": "AWS::Region" } ]
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PrivateAPSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateAPSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+  PrivateAPSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateAPSubnetBCidrBlock
+      AvailabilityZone: !Select [ "1", !GetAZs { "Ref": "AWS::Region" } ]
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PrivateAPSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateAPSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  NatGatewayEIPA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIPA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  NatGatewayEIPB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIPB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    DependsOn: NatGatewayA
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGatewayA
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    DependsOn: NatGatewayB
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGatewayB
+  DefaultSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Default SecurityGroup"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  LBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "SecurityGroup of LB"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !FindInMap [ Constraints, LB, Port ]
+          ToPort: !FindInMap [ Constraints, LB, Port ]
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  APSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: SecurityGroup of AP
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !FindInMap [ Constraints, AP, Port ]
+          ToPort: !FindInMap [ Constraints, AP, Port ]
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+#  for ECS
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${ApplicationName}-${ServiceName}-${Environment}-Cluster
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${ApplicationName}-${ServiceName}-${Environment}-backend-api-app
+      RequiresCompatibilities:
+        - FARGATE
+      Memory: 2048
+      Cpu: 1024
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Sub ${ApplicationName}-${ServiceName}-${Environment}-backend-api-app
+          Image: !Ref ContainerImage
+          Essential: "true"
+          Memory: 1024
+          PortMappings:
+            - ContainerPort: !FindInMap [ Constraints, AP, Port ]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref APServerLogGroup
+              awslogs-stream-prefix: !Ref AWS::StackName
+
+  FargateService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      DesiredCount: !FindInMap [ Constraints, Container, DesiredCount ]
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref APSecurityGroup
+          Subnets:
+            - !Ref PrivateAPSubnetA
+            - !Ref PrivateAPSubnetB
+      HealthCheckGracePeriodSeconds: 0
+      LoadBalancers:
+        - ContainerName: !Sub ${ApplicationName}-${ServiceName}-${Environment}-backend-api-app
+          ContainerPort: !FindInMap [ Constraints, AP, Port ]
+          TargetGroupArn: !Ref TargetGroup
+
+  APServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !FindInMap [ Constraints, AP, LogRetentionPeriod ]
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref LBSecurityGroup
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: !FindInMap [ Constraints, LB, Port ]
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: LoadBalancer
+    Properties:
+      VpcId: !Ref VPC
+      Port: !FindInMap [ Constraints, AP, Port ]
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-299
+      HealthCheckIntervalSeconds: 40
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 30
+      HealthyThresholdCount: 2
+      TargetType: ip
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 30
+      Tags:
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref LoadBalancerListener
+      Priority: 1
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /*
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+Outputs:
+  LoadBalancerDNSName:
+    Description: DNS name for the Load Balancer
+    Value: !GetAtt LoadBalancer.DNSName

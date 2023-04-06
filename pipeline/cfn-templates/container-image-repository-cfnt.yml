@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Resources of the container image repository
+
+Parameters:
+  ParentStackName:
+    Type: String
+  ApplicationName:
+    Type: String
+  ServiceName:
+    Type: String
+  Environment:
+    Type: String
+
+Resources:
+  ContainerImageRepository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties: 
+      RepositoryName: !Sub ${ApplicationName}-${ServiceName}-${Environment}-ci-repository
+      RepositoryPolicyText: 
+        Version: 2012-10-17
+        Statement: 
+          - 
+            Sid: AllowPushPull
+            Effect: Allow
+            Principal: 
+              AWS: 
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:GetRepositoryPolicy
+              - ecr:DescribeRepositories
+              - ecr:ListImages
+              - ecr:DescribeImages
+              - ecr:BatchGetImage
+              - ecr:GetLifecyclePolicy
+              - ecr:GetLifecyclePolicyPreview
+              - ecr:ListTagsForResource
+              - ecr:DescribeImageScanFindings
+      ImageScanningConfiguration: 
+        ScanOnPush: true          
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      ImageTagMutability: MUTABLE
+      LifecyclePolicy:
+          LifecyclePolicyText: >
+            {
+              "rules": [
+                {
+                  "action": {
+                    "type": "expire"
+                  },
+                  "selection": {
+                    "countType": "imageCountMoreThan",
+                    "countNumber": 10,
+                    "tagStatus": "any"
+                  },
+                  "description": "delete old images more than 10 images",
+                  "rulePriority": 1
+                }
+              ]
+            }
+          RegistryId: !Ref AWS::AccountId
+      Tags:
+        - Key: StackName
+          Value: !Ref ParentStackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  Name:
+    Value: !Ref ContainerImageRepository

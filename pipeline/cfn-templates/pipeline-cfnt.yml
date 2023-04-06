@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Resources of the CI/CD pipeline
+
+Parameters:
+  ParentStackName:
+    Type: String
+  ApplicationName:
+    Type: String
+  ServiceName:
+    Type: String
+  Environment:
+    Type: String
+  ArtifactRepositoryName:
+    Type: String
+  ArtifactEncryptionKeyArn:
+    Type: String
+  BuildAndUnitTestProjectName:
+    Type: String
+  BuildAndPushContainerImageProjectName:
+    Type: String
+  RepositoryName:
+    Type: String
+  BranchName:
+    Type: String
+  ContainerImageRepositoryName:
+    Type: String
+
+Resources:
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref ArtifactRepositoryName
+        Type: S3
+        EncryptionKey:
+          Type: KMS
+          Id: !Ref ArtifactEncryptionKeyArn
+      RoleArn: !GetAtt PipelineRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Featch
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeStarSourceConnection
+              Configuration:
+                ConnectionArn: "{{resolve:ssm:/codestar-connection/connection-arn}}"
+                FullRepositoryId: !Ref RepositoryName
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: Source
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: Build-And-UnitTest
+              InputArtifacts:
+                - Name: Source
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref BuildAndUnitTestProjectName
+                EnvironmentVariables: !Sub "[ {\"name\":\"APPLICATION_NAME\", \"value\": \"${ApplicationName}\", \"type\": \"PLAINTEXT\"}, {\"name\":\"SERVICE_NAME\", \"value\": \"${ServiceName}\", \"type\": \"PLAINTEXT\"}, {\"name\":\"ENVIRONMENT\", \"value\": \"${Environment}\", \"type\": \"PLAINTEXT\"} ]"
+              OutputArtifacts:
+                - Name: Application
+                - Name: AWSResources
+              RunOrder: 1
+            - Name: Build-And-Push-Container-Image
+              InputArtifacts:
+                - Name: Application
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref BuildAndPushContainerImageProjectName
+                EnvironmentVariables: !Sub "[ {\"name\":\"APPLICATION_NAME\", \"value\": \"${ApplicationName}\", \"type\": \"PLAINTEXT\"}, {\"name\":\"SERVICE_NAME\", \"value\": \"${ServiceName}\", \"type\": \"PLAINTEXT\"}, {\"name\":\"ENVIRONMENT\", \"value\": \"${Environment}\", \"type\": \"PLAINTEXT\"} ]"
+              RunOrder: 2
+        - Name: Deploy
+          Actions:
+            - Name: Deploy-Appliction-And-AWS-Resources
+              InputArtifacts:
+                - Name: AWSResources
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                StackName: !Sub ${ApplicationName}-${ServiceName}-${Environment}-aws-resources
+                TemplatePath: AWSResources::resources/aws/production-resources-cfnt.yml
+                TemplateConfiguration: AWSResources::resources/aws/production-config.json
+                Capabilities: CAPABILITY_NAMED_IAM
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                ParameterOverrides: !Sub |
+                  {
+                    "ApplicationName": "${ApplicationName}",
+                    "ServiceName": "${ServiceName}",
+                    "Environment": "${Environment}",
+                    "ContainerImage": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ContainerImageRepositoryName}:latest"
+                  }
+              RunOrder: 1
+      Tags:
+        - Key: "StackName"
+          Value: !Ref ParentStackName
+        - Key: "ApplicationName"
+          Value: !Ref ApplicationName
+        - Key: "ServiceName"
+          Value: !Ref ServiceName
+        - Key: "Environment"
+          Value: !Ref Environment
+
+  CloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: cloudformation.amazonaws.com
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      Tags:
+        - Key: "StackName"
+          Value: !Ref ParentStackName
+        - Key: "ApplicationName"
+          Value: !Ref ApplicationName
+        - Key: "ServiceName"
+          Value: !Ref ServiceName
+        - Key: "Environment"
+          Value: !Ref Environment
+
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      Tags:
+        - Key: "StackName"
+          Value: !Ref ParentStackName
+        - Key: "ApplicationName"
+          Value: !Ref ApplicationName
+        - Key: "ServiceName"
+          Value: !Ref ServiceName
+        - Key: "Environment"
+          Value: !Ref Environment
+
+Outputs:
+  PipelineName:
+    Value: !Ref Pipeline
+  PipelineVersion:
+    Value: !GetAtt Pipeline.Version
+  PipelineRoleName:
+    Value: !Ref PipelineRole
+  PipelineRoleArn:
+    Value: !GetAtt PipelineRole.Arn
+  PipelineRoleId:
+    Value: !GetAtt PipelineRole.RoleId

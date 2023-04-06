@@ -1,0 +1,13 @@
+{
+  "Parameters": {
+    "ApplicationName": "DONT-EDIT-HERE",
+    "ServiceName": "DONT-EDIT-HERE",
+    "Environment": "DONT-EDIT-HERE",
+    "ContainerImage": "DONT-EDIT-HERE",
+    "VpcCidrBlock": "192.168.0.0/24",
+    "PublicSubnetACidrBlock": "192.168.0.0/27",
+    "PublicSubnetBCidrBlock": "192.168.0.32/27",
+    "PrivateAPSubnetACidrBlock": "192.168.0.64/27",
+    "PrivateAPSubnetBCidrBlock": "192.168.0.96/27"
+  }
+}

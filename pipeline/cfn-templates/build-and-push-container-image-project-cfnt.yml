@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Resources of the container image push
+
+Parameters:
+  ParentStackName:
+    Type: String
+  ApplicationName:
+    Type: String
+  ServiceName:
+    Type: String
+  Environment:
+    Type: String
+  ArtifactEncryptionKeyArn:
+    Type: String
+  ContainerImageRepositoryName:
+    Type: String
+
+Mappings:
+  Constraints:
+    BuildResources:
+      CodeBuildImage: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+      ComputeType: BUILD_GENERAL1_SMALL
+      BuildSpec: pipeline/buildspecs/build-and-push-container-image-project/buildspec.yml
+
+Resources:
+
+  PushContainerImageProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      ServiceRole: !Ref PushContainerImageProjectRole
+      EncryptionKey: !Ref ArtifactEncryptionKeyArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: !FindInMap [ Constraints, BuildResources, ComputeType ]
+        Image: !FindInMap [ Constraints, BuildResources, CodeBuildImage ]
+        PrivilegedMode: True
+        EnvironmentVariables:
+          - Name: APPLICATION_NAME
+            Value: !Ref ApplicationName
+          - Name: SERVICE_NAME
+            Value: !Ref ServiceName
+          - Name: ENVIRONMENT
+            Value: !Ref Environment
+          - Name: REPOSITORY_URI
+            Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ContainerImageRepositoryName}"
+          - Name: REPOSITORY_NAME
+            Value: !Ref ContainerImageRepositoryName
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !FindInMap [ Constraints, BuildResources, BuildSpec ]
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref PushContainerImageProjectLogsGroup
+      Cache:
+        Type: LOCAL
+        Modes:
+          - LOCAL_DOCKER_LAYER_CACHE
+          - LOCAL_SOURCE_CACHE
+      Tags:
+        - Key: StackName
+          Value: !Ref ParentStackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+      TimeoutInMinutes: 10
+
+  PushContainerImageProjectPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Path: '/'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - "logs:*"
+              - "s3:ListBucket"
+              - "s3:GetObject"
+              - "s3:ListObjects"
+              - "s3:PutObject"
+              - "s3:GetObjectVersion"
+              - "s3:DeleteObject"
+              - "ssm:GetParameter"
+              - "ssm:GetParameters"
+              - "cloudfront:ListDistributions"
+              - "cloudfront:CreateInvalidation"
+              - "kms:*"
+              - "secretsmanager:GetSecretValue"
+              - "ecr:GetAuthorizationToken"
+              - "ecr:CompleteLayerUpload"
+              - "ecr:UploadLayerPart"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:PutImage"
+            Effect: Allow
+            Resource: '*'
+
+  PushContainerImageProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: '/'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref PushContainerImageProjectPolicy
+      Tags:
+        - Key: StackName
+          Value: !Ref ParentStackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+
+  PushContainerImageProjectLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+      Tags:
+        - Key: StackName
+          Value: !Ref ParentStackName
+        - Key: ApplicationName
+          Value: !Ref ApplicationName
+        - Key: ServiceName
+          Value: !Ref ServiceName
+
+Outputs:
+  ProjectName:
+    Value: !Ref PushContainerImageProject
