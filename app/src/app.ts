@@ -13,7 +13,8 @@ const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET;
 
 const app: Application = express();
 
-app.get('/event_handler', (req: Request, res: Response, NextFunction) => {
+app.post('/event_handler', (req: Request, res: Response, NextFunction) => {
+  console.log(req);
   res.send('Hello from Express');
 });
 
